@@ -73,8 +73,6 @@ cdc/
 │   ├── Dockerfile
 │   ├── docker-compose.yml
 │   ├── .env.example
-│   ├── config/
-│   │   └── oracle-connector.json   # 커넥터 설정
 │   ├── plugins/                    # ojdbc11.jar 수동 배치 위치 (gitignore 권장)
 │   └── scripts/
 │       ├── oracle-setup.sql        # Oracle 사전 설정 (SYSDBA 실행)
@@ -235,6 +233,70 @@ docker compose up -d
 | `TARGET_ORACLE_USER` | 타겟 DB 계정 | `cdc_target` |
 | `UPSERT_TOPICS` | upsert 처리할 토픽 목록 | `oracle.SCHEMA.T1,oracle.SCHEMA.T2` |
 | `INSERT_ONLY_TOPICS` | insert-only 처리할 토픽 목록 | `oracle.SCHEMA.T3` |
+
+## 소스 커넥터 주요 설정
+
+`oracle-source/scripts/register-connector.sh`에서 등록되는 커넥터 설정 항목입니다.
+
+### DB 연결
+
+| 설정 | 값 | 설명 |
+|------|-----|------|
+| `database.hostname` | `ORACLE_SCAN_HOST` | 초기 스냅샷·일반 쿼리용 SCAN 주소 |
+| `database.url` | RAC JDBC URL | LogMiner용 RAC 직접 연결 (LOAD_BALANCE + FAILOVER) |
+| `rac.nodes` | `NODE1,NODE2` | LogMiner가 Redo Log를 읽을 노드 IP 목록 |
+
+> SCAN 주소는 스냅샷에, 각 노드 IP(`rac.nodes`)는 Redo Log 직접 접근에 사용됩니다.
+
+### 테이블 필터링
+
+| 설정 | 설명 |
+|------|------|
+| `table.include.list` | CDC 대상 테이블 목록. 미포함 테이블의 Redo Log는 무시 |
+| `snapshot.include.collection.list` | 초기 스냅샷을 실행할 테이블 (table.include.list의 부분집합). 미포함 시 CDC 스트리밍만 적용 |
+| `message.key.columns` | PK 없는 테이블에 Kafka 레코드 키로 사용할 컬럼 지정. 싱크의 upsert/delete WHERE 조건으로 사용됨 |
+
+### LogMiner
+
+| 설정 | 값 | 설명 |
+|------|-----|------|
+| `log.mining.strategy` | `online_catalog` | 온라인 딕셔너리 참조. 별도 딕셔너리 추출 불필요하나 DDL 변경에 민감 |
+| `log.mining.batch.size.max` | 20000 | LogMiner 세션당 최대 읽기 이벤트 수 |
+| `log.mining.sleep.time.max.ms` | 3000 | 읽을 이벤트 없을 때 대기 최대 시간 (ms) |
+| `log.mining.transaction.retention.ms` | 86400000 | 미완료 트랜잭션 보관 시간 (24시간). 초과 시 롤백 처리 |
+
+### 스냅샷
+
+| 설정 | 값 | 설명 |
+|------|-----|------|
+| `snapshot.mode` | `initial` | 커넥터 최초 기동 시 스냅샷 수행. 이후 재기동 시에는 오프셋부터 재개 |
+| `snapshot.locking.mode` | `none` | 스냅샷 중 테이블 잠금 없음. 소스 DB 부하 최소화 |
+| `snapshot.fetch.size` | 2000 | 스냅샷 시 한 번에 읽는 행 수 |
+
+### 데이터 타입 변환
+
+| 설정 | 값 | 설명 |
+|------|-----|------|
+| `decimal.handling.mode` | `string` | NUMBER/DECIMAL 타입을 문자열로 변환. 정밀도 손실 방지 |
+| `time.precision.mode` | `connect` | 날짜·시간 타입을 Kafka Connect 표준 타입으로 변환 |
+| `binary.handling.mode` | `base64` | BLOB/RAW 등 바이너리 데이터를 Base64 문자열로 인코딩 |
+
+### 성능
+
+| 설정 | 값 | 설명 |
+|------|-----|------|
+| `poll.interval.ms` | 1000 | Kafka Connect가 커넥터에 레코드를 요청하는 주기 (ms) |
+| `max.batch.size` | 2048 | 한 번의 poll에서 반환할 최대 레코드 수 |
+| `max.queue.size` | 8192 | 내부 큐 최대 크기. max.batch.size보다 크게 유지 필요 |
+| `heartbeat.interval.ms` | 10000 | 변경 없을 때 오프셋 갱신용 heartbeat 전송 주기 (ms). Redo Log 보관 만료 방지 |
+
+### 기타
+
+| 설정 | 값 | 설명 |
+|------|-----|------|
+| `tombstones.on.delete` | `true` | DELETE 시 null value 레코드(tombstone)를 추가 발행. 싱크의 delete 처리에 필요 |
+| `signal.kafka.topic` | `oracle.signals` | ad-hoc 스냅샷 트리거 수신용 토픽 |
+| `schema.history.internal.kafka.topic` | `oracle.schema-history` | DDL 스키마 이력 저장 토픽. 커넥터 재기동 시 타입 복원에 사용 |
 
 ## 싱크 토픽 라우팅
 
