@@ -236,6 +236,79 @@ docker compose up -d
 | `UPSERT_TOPICS` | upsert 처리할 토픽 목록 | `oracle.SCHEMA.T1,oracle.SCHEMA.T2` |
 | `INSERT_ONLY_TOPICS` | insert-only 처리할 토픽 목록 | `oracle.SCHEMA.T3` |
 
+## 싱크 토픽 라우팅
+
+### Kafka 토픽 네이밍 규칙
+
+소스 커넥터는 Oracle 변경 이벤트를 아래 형식의 토픽으로 자동 발행합니다.
+
+```
+oracle.SCHEMA.TABLE
+  │      │      └── 테이블명
+  │      └───────── 스키마명
+  └──────────────── database.server.name (소스 커넥터 설정값)
+```
+
+### UPSERT_TOPICS / INSERT_ONLY_TOPICS 동작 원리
+
+두 환경변수는 각 싱크 커넥터가 **구독할 토픽 목록**을 지정합니다.  
+`register-sink-connector.sh` 기동 시 이 값을 읽어 Kafka Connect REST API로 커넥터를 등록합니다.
+
+```
+target-db-sink/.env
+  UPSERT_TOPICS=oracle.MYSCHEMA.TABLE1,oracle.MYSCHEMA.TABLE2
+        │
+        ▼
+register-sink-connector.sh
+  curl -X POST /connectors -d '{ "topics": "oracle.MYSCHEMA.TABLE1,oracle.MYSCHEMA.TABLE2", ... }'
+        │
+        ▼
+oracle-jdbc-sink-upsert 커넥터
+  oracle.MYSCHEMA.TABLE1, oracle.MYSCHEMA.TABLE2 두 토픽을 구독하여 처리
+```
+
+### 설정 예시 (TABLE1, TABLE2, TABLE3 중 TABLE1·TABLE2만 연계)
+
+**oracle-source/.env**
+
+```bash
+# TABLE3 는 목록에서 제외 → Redo Log를 읽어도 무시, 토픽 미생성
+TABLE_INCLUDE_LIST=MYSCHEMA.TABLE1,MYSCHEMA.TABLE2
+MESSAGE_KEY_COLUMNS=MYSCHEMA.TABLE2:COL_A,COL_B   # TABLE2 PK 없는 경우 키 컬럼 지정
+```
+
+**target-db-sink/.env**
+
+```bash
+# TABLE1: PK 있음 → upsert 커넥터
+UPSERT_TOPICS=oracle.MYSCHEMA.TABLE1,oracle.MYSCHEMA.TABLE2
+
+# PK 없고 키도 지정 불가한 테이블이 있으면 여기에 추가
+INSERT_ONLY_TOPICS=
+```
+
+**결과 흐름**
+
+```
+Oracle 소스
+├── TABLE1 변경  →  oracle.MYSCHEMA.TABLE1  →  oracle-jdbc-sink-upsert
+│                                               MERGE INTO MYSCHEMA.TABLE1
+├── TABLE2 변경  →  oracle.MYSCHEMA.TABLE2  →  oracle-jdbc-sink-upsert
+│                                               MERGE INTO MYSCHEMA.TABLE2
+└── TABLE3 변경  →  (무시, 토픽 없음)
+```
+
+### 토픽명 → 타겟 테이블명 변환 (RegexRouter)
+
+싱크 커넥터는 토픽명에서 `oracle.` 접두사를 제거하여 타겟 테이블명으로 사용합니다.
+
+```
+oracle.MYSCHEMA.TABLE1  →  MYSCHEMA.TABLE1
+oracle.MYSCHEMA.TABLE2  →  MYSCHEMA.TABLE2
+```
+
+소스와 타겟의 스키마·테이블명이 동일한 구조를 전제합니다.
+
 ## 테이블별 스냅샷 제어
 
 ### 초기 스냅샷 선택
