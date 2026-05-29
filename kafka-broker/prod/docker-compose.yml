@@ -1,0 +1,47 @@
+version: '3.8'
+
+networks:
+  cdc-network:
+    name: cdc-network
+    driver: bridge
+
+services:
+  kafka:
+    image: apache/kafka:3.8.1
+    container_name: kafka-${NODE_ID}
+    networks:
+      - cdc-network
+    ports:
+      - "${EXTERNAL_PORT}:${EXTERNAL_PORT}"
+      - "9092:9092"
+      - "9093:9093"
+    environment:
+      KAFKA_NODE_ID: ${NODE_ID}
+      KAFKA_PROCESS_ROLES: broker,controller
+      CLUSTER_ID: ${KAFKA_CLUSTER_ID}
+      KAFKA_CONTROLLER_QUORUM_VOTERS: ${QUORUM_VOTERS}
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093,EXTERNAL://0.0.0.0:${EXTERNAL_PORT}
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://${NODE_HOST}:9092,EXTERNAL://${NODE_HOST}:${EXTERNAL_PORT}
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_MIN_INSYNC_REPLICAS: 2
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_LOG_SEGMENT_BYTES: 1073741824
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions.sh --bootstrap-server localhost:9092 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
+volumes:
+  kafka-data:
