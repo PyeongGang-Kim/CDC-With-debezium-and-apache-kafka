@@ -10,6 +10,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        DEBEZIUM_VERSION: ${DEBEZIUM_VERSION:-3.0.0.Final}
     container_name: kafka-connect-source
     networks:
       - cdc-network
@@ -40,6 +42,8 @@ services:
       ORACLE_LOGMINER_USER: ${ORACLE_LOGMINER_USER:-c##dbzuser}
       ORACLE_LOGMINER_PASSWORD: ${ORACLE_LOGMINER_PASSWORD}
       TABLE_INCLUDE_LIST: ${TABLE_INCLUDE_LIST}
+      CDC_METHOD: ${CDC_METHOD:-logminer}
+      XSTREAM_OUT_SERVER_NAME: ${XSTREAM_OUT_SERVER_NAME:-dbzxout}
     volumes:
       - ./logs:/kafka/logs
     healthcheck:
@@ -73,4 +77,6 @@ services:
       ORACLE_LOGMINER_PASSWORD: ${ORACLE_LOGMINER_PASSWORD}
       TABLE_INCLUDE_LIST: ${TABLE_INCLUDE_LIST}
       KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092,kafka-2:9092,kafka-3:9092
+      CDC_METHOD: ${CDC_METHOD:-logminer}
+      XSTREAM_OUT_SERVER_NAME: ${XSTREAM_OUT_SERVER_NAME:-dbzxout}
     restart: "no"
