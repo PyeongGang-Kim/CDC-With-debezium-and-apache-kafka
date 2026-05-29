@@ -101,6 +101,97 @@ cdc/
 | Oracle JDBC Driver | ojdbc11.jar ([다운로드](https://www.oracle.com/database/technologies/appdev/jdbc-downloads.html)) |
 | Oracle 소스 DB | Oracle 12c 이상 (Archive Log 모드, Supplemental Logging 필요) |
 
+## 폐쇄망 환경 구성
+
+외부 Docker 레지스트리 접근이 불가한 사내망 환경에서는 아래 두 가지 방법 중 하나를 선택합니다.
+
+### 방법 1. 이미지 tar 파일로 직접 전송
+
+인터넷이 가능한 외부 PC에서 이미지를 저장한 뒤 사내망 서버로 옮기는 방식입니다.
+
+**외부 PC에서**
+
+```bash
+docker pull apache/kafka:3.8.1
+docker pull provectuslabs/kafka-ui:latest
+docker pull debezium/connect:2.7
+docker pull curlimages/curl:latest
+
+docker save \
+  apache/kafka:3.8.1 \
+  provectuslabs/kafka-ui:latest \
+  debezium/connect:2.7 \
+  curlimages/curl:latest \
+  -o cdc-images.tar
+```
+
+USB, 파일서버 등으로 `cdc-images.tar`를 사내망 서버에 전송합니다.
+
+**사내망 서버에서**
+
+```bash
+docker load -i cdc-images.tar
+```
+
+이후 docker compose up 실행 시 로컬 이미지를 사용하므로 외부 접근 없이 구동됩니다.
+
+---
+
+### 방법 2. 사내 Private Registry 구축
+
+사내 서버에 Docker Registry를 구성하고 모든 이미지를 내부에서 관리하는 방식입니다.  
+지속적으로 이미지를 관리해야 하는 팀 환경에 적합합니다.
+
+**Registry 서버에서 (최초 1회)**
+
+```bash
+docker run -d -p 5000:5000 --restart always --name registry registry:2
+```
+
+**외부 PC에서 — 이미지 pull 후 사내 registry에 push**
+
+```bash
+REGISTRY=내부registry주소:5000
+
+docker pull apache/kafka:3.8.1
+docker pull provectuslabs/kafka-ui:latest
+docker pull debezium/connect:2.7
+docker pull curlimages/curl:latest
+
+docker tag apache/kafka:3.8.1              $REGISTRY/apache/kafka:3.8.1
+docker tag provectuslabs/kafka-ui:latest   $REGISTRY/provectuslabs/kafka-ui:latest
+docker tag debezium/connect:2.7            $REGISTRY/debezium/connect:2.7
+docker tag curlimages/curl:latest          $REGISTRY/curlimages/curl:latest
+
+docker push $REGISTRY/apache/kafka:3.8.1
+docker push $REGISTRY/provectuslabs/kafka-ui:latest
+docker push $REGISTRY/debezium/connect:2.7
+docker push $REGISTRY/curlimages/curl:latest
+```
+
+**docker-compose.yml 이미지 주소 변경**
+
+각 compose 파일의 `image:` 항목을 사내 registry 주소로 교체합니다.
+
+```yaml
+# 변경 전
+image: apache/kafka:3.8.1
+
+# 변경 후
+image: 내부registry주소:5000/apache/kafka:3.8.1
+```
+
+---
+
+### 프로젝트에서 사용하는 이미지 목록
+
+| 이미지 | 사용처 |
+|---|---|
+| `apache/kafka:3.8.1` | kafka-broker |
+| `provectuslabs/kafka-ui:latest` | kafka-broker (개발용 UI) |
+| `debezium/connect:2.7` | oracle-source, target-db-sink 베이스 이미지 |
+| `curlimages/curl:latest` | connector-init 컨테이너 |
+
 ## 설치 및 실행
 
 ### 1단계 — Oracle 소스 DB 사전 설정
