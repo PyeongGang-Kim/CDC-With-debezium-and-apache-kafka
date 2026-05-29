@@ -10,9 +10,10 @@ ARG DEBEZIUM_VERSION=3.0.0.Final
 USER root
 
 COPY plugins/ /tmp/debezium-plugins/
-RUN tar -xzf "/tmp/debezium-plugins/debezium-connector-oracle-${DEBEZIUM_VERSION}-plugin.tar.gz" \
+RUN rm -rf /kafka/connect/debezium-connector-oracle* && \
+    tar -xzf "/tmp/debezium-plugins/debezium-connector-oracle-${DEBEZIUM_VERSION}-plugin.tar.gz" \
       -C /kafka/connect/ && \
-    cp /tmp/debezium-plugins/ojdbc11.jar /kafka/connect/debezium-connector-oracle/ && \
+    cp /tmp/debezium-plugins/ojdbc11.jar "/kafka/connect/debezium-connector-oracle-${DEBEZIUM_VERSION}/" && \
     rm -rf /tmp/debezium-plugins
 
 ENV LD_LIBRARY_PATH=/usr/lib/oracle/instantclient:$LD_LIBRARY_PATH

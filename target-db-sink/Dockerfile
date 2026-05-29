@@ -10,9 +10,10 @@ ARG DEBEZIUM_VERSION=3.0.0.Final
 USER root
 
 COPY plugins/ /tmp/debezium-plugins/
-RUN tar -xzf "/tmp/debezium-plugins/debezium-connector-jdbc-${DEBEZIUM_VERSION}-plugin.tar.gz" \
+RUN rm -rf /kafka/connect/debezium-connector-jdbc* && \
+    tar -xzf "/tmp/debezium-plugins/debezium-connector-jdbc-${DEBEZIUM_VERSION}-plugin.tar.gz" \
       -C /kafka/connect/ && \
-    cp /tmp/debezium-plugins/ojdbc11.jar /kafka/connect/debezium-connector-jdbc/ && \
+    cp /tmp/debezium-plugins/ojdbc11.jar "/kafka/connect/debezium-connector-jdbc-${DEBEZIUM_VERSION}/" && \
     rm -rf /tmp/debezium-plugins
 
 USER kafka
