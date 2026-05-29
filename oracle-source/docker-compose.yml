@@ -1,0 +1,76 @@
+version: '3.8'
+
+networks:
+  cdc-network:
+    name: cdc-network
+    external: true  # kafka-broker의 cdc-network에 참여
+
+services:
+  kafka-connect-source:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: kafka-connect-source
+    networks:
+      - cdc-network
+    ports:
+      - "8083:8083"
+    environment:
+      BOOTSTRAP_SERVERS: kafka-1:9092,kafka-2:9092,kafka-3:9092
+      GROUP_ID: oracle-cdc-source-group
+      CONFIG_STORAGE_TOPIC: connect-configs
+      OFFSET_STORAGE_TOPIC: connect-offsets
+      STATUS_STORAGE_TOPIC: connect-status
+      CONFIG_STORAGE_REPLICATION_FACTOR: 2
+      OFFSET_STORAGE_REPLICATION_FACTOR: 2
+      STATUS_STORAGE_REPLICATION_FACTOR: 2
+      CONNECT_PLUGIN_PATH: /kafka/connect
+      # JSON with schema - Debezium JDBC Sink가 컬럼 타입 추론에 사용
+      CONNECT_KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_KEY_CONVERTER_SCHEMAS_ENABLE: "true"
+      CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: "true"
+      ORACLE_SCAN_HOST: ${ORACLE_SCAN_HOST}
+      ORACLE_PORT: ${ORACLE_PORT:-1521}
+      ORACLE_SERVICE_NAME: ${ORACLE_SERVICE_NAME}
+      ORACLE_CDB_NAME: ${ORACLE_CDB_NAME}
+      ORACLE_PDB_NAME: ${ORACLE_PDB_NAME:-}
+      ORACLE_RAC_NODE1: ${ORACLE_RAC_NODE1}
+      ORACLE_RAC_NODE2: ${ORACLE_RAC_NODE2}
+      ORACLE_LOGMINER_USER: ${ORACLE_LOGMINER_USER:-c##dbzuser}
+      ORACLE_LOGMINER_PASSWORD: ${ORACLE_LOGMINER_PASSWORD}
+      TABLE_INCLUDE_LIST: ${TABLE_INCLUDE_LIST}
+    volumes:
+      - ./logs:/kafka/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8083/connectors"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  connector-init:
+    image: curlimages/curl:latest
+    container_name: source-connector-init
+    networks:
+      - cdc-network
+    depends_on:
+      kafka-connect-source:
+        condition: service_healthy
+    volumes:
+      - ./scripts:/scripts
+    entrypoint: ["/bin/sh", "/scripts/register-connector.sh"]
+    environment:
+      CONNECT_URL: http://kafka-connect-source:8083
+      ORACLE_SCAN_HOST: ${ORACLE_SCAN_HOST}
+      ORACLE_PORT: ${ORACLE_PORT:-1521}
+      ORACLE_SERVICE_NAME: ${ORACLE_SERVICE_NAME}
+      ORACLE_CDB_NAME: ${ORACLE_CDB_NAME}
+      ORACLE_PDB_NAME: ${ORACLE_PDB_NAME:-}
+      ORACLE_RAC_NODE1: ${ORACLE_RAC_NODE1}
+      ORACLE_RAC_NODE2: ${ORACLE_RAC_NODE2}
+      ORACLE_LOGMINER_USER: ${ORACLE_LOGMINER_USER:-c##dbzuser}
+      ORACLE_LOGMINER_PASSWORD: ${ORACLE_LOGMINER_PASSWORD}
+      TABLE_INCLUDE_LIST: ${TABLE_INCLUDE_LIST}
+      KAFKA_BOOTSTRAP_SERVERS: kafka-1:9092,kafka-2:9092,kafka-3:9092
+    restart: "no"

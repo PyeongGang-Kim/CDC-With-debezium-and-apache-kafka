@@ -1,0 +1,40 @@
+{
+  "name": "oracle-jdbc-sink-upsert",
+  "config": {
+    "connector.class": "io.debezium.connector.jdbc.JdbcSinkConnector",
+    "tasks.max": "4",
+
+    "_comment_topics": [
+      "PK 또는 message.key.columns 로 키가 지정된 테이블의 토픽 목록.",
+      "topics.regex 대신 명시적 목록을 사용해 insert-only 커넥터와 토픽이 겹치지 않게 함.",
+      "형식: oracle.SCHEMA.TABLE1,oracle.SCHEMA.TABLE2"
+    ],
+    "topics": "${UPSERT_TOPICS}",
+
+    "connection.url": "jdbc:oracle:thin:@(DESCRIPTION=(LOAD_BALANCE=on)(FAILOVER=on)(ADDRESS=(PROTOCOL=TCP)(HOST=${TARGET_ORACLE_NODE1})(PORT=${TARGET_ORACLE_PORT}))(ADDRESS=(PROTOCOL=TCP)(HOST=${TARGET_ORACLE_NODE2})(PORT=${TARGET_ORACLE_PORT}))(CONNECT_DATA=(SERVICE_NAME=${TARGET_ORACLE_SERVICE_NAME})(SERVER=DEDICATED)))",
+    "connection.username": "${TARGET_ORACLE_USER}",
+    "connection.password": "${TARGET_ORACLE_PASSWORD}",
+
+    "insert.mode": "upsert",
+    "primary.key.mode": "record_key",
+    "delete.enabled": "true",
+
+    "schema.evolution": "none",
+
+    "table.naming.strategy": "io.debezium.connector.jdbc.naming.DefaultTableNamingStrategy",
+    "column.naming.strategy": "io.debezium.connector.jdbc.naming.DefaultColumnNamingStrategy",
+
+    "transforms": "route",
+    "transforms.route.type": "org.apache.kafka.connect.transforms.RegexRouter",
+    "transforms.route.regex": "oracle\\.(.+)",
+    "transforms.route.replacement": "$1",
+
+    "errors.log.enable": "true",
+    "errors.log.include.messages": "true",
+    "errors.tolerance": "none",
+
+    "batch.size": "500",
+    "max.retries": "5",
+    "retry.backoff.ms": "3000"
+  }
+}

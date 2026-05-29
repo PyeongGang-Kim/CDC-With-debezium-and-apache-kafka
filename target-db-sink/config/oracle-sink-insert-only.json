@@ -1,0 +1,46 @@
+{
+  "name": "oracle-jdbc-sink-insert-only",
+  "config": {
+    "connector.class": "io.debezium.connector.jdbc.JdbcSinkConnector",
+    "tasks.max": "2",
+
+    "_comment_topics": [
+      "키 컬럼을 특정할 수 없는 PK-less 테이블 전용 커넥터.",
+      "upsert 커넥터와 반드시 토픽이 겹치지 않아야 함.",
+      "형식: oracle.SCHEMA.TABLE3,oracle.SCHEMA.TABLE4"
+    ],
+    "topics": "${INSERT_ONLY_TOPICS}",
+
+    "connection.url": "jdbc:oracle:thin:@(DESCRIPTION=(LOAD_BALANCE=on)(FAILOVER=on)(ADDRESS=(PROTOCOL=TCP)(HOST=${TARGET_ORACLE_NODE1})(PORT=${TARGET_ORACLE_PORT}))(ADDRESS=(PROTOCOL=TCP)(HOST=${TARGET_ORACLE_NODE2})(PORT=${TARGET_ORACLE_PORT}))(CONNECT_DATA=(SERVICE_NAME=${TARGET_ORACLE_SERVICE_NAME})(SERVER=DEDICATED)))",
+    "connection.username": "${TARGET_ORACLE_USER}",
+    "connection.password": "${TARGET_ORACLE_PASSWORD}",
+
+    "_comment_mode": [
+      "insert.mode: insert — 매 이벤트를 단순 INSERT 로 처리.",
+      "primary.key.mode: none — 키 없이 동작.",
+      "delete.enabled: false — 키 없이 DELETE 불가, 소스의 DELETE 이벤트는 무시됨.",
+      "중복 방지가 필요하면 타겟 테이블에 UNIQUE 제약 또는 별도 중복 제거 로직 필요."
+    ],
+    "insert.mode": "insert",
+    "primary.key.mode": "none",
+    "delete.enabled": "false",
+
+    "schema.evolution": "none",
+
+    "table.naming.strategy": "io.debezium.connector.jdbc.naming.DefaultTableNamingStrategy",
+    "column.naming.strategy": "io.debezium.connector.jdbc.naming.DefaultColumnNamingStrategy",
+
+    "transforms": "route",
+    "transforms.route.type": "org.apache.kafka.connect.transforms.RegexRouter",
+    "transforms.route.regex": "oracle\\.(.+)",
+    "transforms.route.replacement": "$1",
+
+    "errors.log.enable": "true",
+    "errors.log.include.messages": "true",
+    "errors.tolerance": "none",
+
+    "batch.size": "1000",
+    "max.retries": "5",
+    "retry.backoff.ms": "3000"
+  }
+}
