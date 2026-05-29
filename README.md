@@ -210,15 +210,43 @@ Oracle 소스 DB에 SYSDBA로 접속하여 실행합니다.
 - Debezium LogMiner 전용 계정 생성 (`c##dbzuser`)
 - LogMiner 관련 권한 부여
 
-### 2단계 — Oracle JDBC 드라이버 배치
+### 2단계 — 플러그인 파일 배치
 
-Oracle JDBC 드라이버는 라이선스 제한으로 자동 다운로드가 불가합니다.  
-`ojdbc11.jar`를 각 `plugins/` 디렉터리에 직접 배치합니다.
+빌드 전에 아래 파일들을 각 `plugins/` 디렉터리에 배치합니다.
+
+**Debezium 커넥터 플러그인 (tar.gz)**  
+[Debezium 릴리즈 페이지](https://debezium.io/releases/) 또는 Maven Central에서 사용할 버전의 파일을 다운로드합니다.
+
+```
+# oracle-source/plugins/
+https://repo1.maven.org/maven2/io/debezium/debezium-connector-oracle/{VERSION}/debezium-connector-oracle-{VERSION}-plugin.tar.gz
+
+# target-db-sink/plugins/
+https://repo1.maven.org/maven2/io/debezium/debezium-connector-jdbc/{VERSION}/debezium-connector-jdbc-{VERSION}-plugin.tar.gz
+```
+
+**Oracle JDBC 드라이버**  
+라이선스 제한으로 자동 다운로드가 불가합니다. [다운로드](https://www.oracle.com/database/technologies/appdev/jdbc-downloads.html) 후 배치합니다.
 
 ```bash
 cp /path/to/ojdbc11.jar oracle-source/plugins/
 cp /path/to/ojdbc11.jar target-db-sink/plugins/
 ```
+
+배치 후 `plugins/` 디렉터리 구조:
+
+```
+oracle-source/plugins/
+├── debezium-connector-oracle-{VERSION}-plugin.tar.gz
+└── ojdbc11.jar
+
+target-db-sink/plugins/
+├── debezium-connector-jdbc-{VERSION}-plugin.tar.gz
+└── ojdbc11.jar
+```
+
+> `.env`의 `DEBEZIUM_VERSION`과 tar.gz 파일명의 버전이 일치해야 합니다.  
+> 버전 업그레이드 시 tar.gz 교체 후 `DEBEZIUM_VERSION` 수정, `docker compose build` 재실행합니다.
 
 ### 3단계 — kafka-broker 실행
 
